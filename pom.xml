@@ -15,6 +15,24 @@
 		<gpg.keyname>26463462</gpg.keyname>
 	</properties>
 
+	<organization>
+		<name>Atomic Leopard</name>
+		<url>http://www.atomicleopard.com.au</url>
+	</organization>
+	<developers>
+		<developer>
+			<id>nick</id>
+			<name>Nicholas Okunew</name>
+			<email>nick@atomicleopard.com.au</email>
+		</developer>
+	</developers>
+	<scm>
+		<connection>scm:git:https://github.com/atomicleopard/thundr-contrib-sendgrid</connection>
+		<developerConnection>scm:git:https://github.com/atomicleopard/thundr-contrib-sendgrid</developerConnection>
+		<url>https://github.com/atomicleopard/thundr-contrib-sendgrid</url>
+		<tag>HEAD</tag>
+	</scm>
+
 	<dependencies>
 		<dependency>
 			<groupId>com.threewks.thundr</groupId>
