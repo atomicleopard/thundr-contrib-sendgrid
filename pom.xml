@@ -37,4 +37,8 @@
 		</dependency>
 	</dependencies>
 	<modelVersion>4.0.0</modelVersion>
+
+  <scm>
+    <tag>thundr-contrib-sendgrid-2.0.0</tag>
+  </scm>
 </project>
