@@ -25,6 +25,8 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.threewks.thundr.http.ContentType;
+import com.threewks.thundr.request.RequestContainer;
+import com.threewks.thundr.request.ThreadLocalRequestContainer;
 import com.threewks.thundr.util.Streams;
 import com.threewks.thundr.view.ViewResolverRegistry;
 import com.threewks.thundr.view.file.Disposition;
@@ -37,6 +39,7 @@ import com.threewks.thundr.view.string.StringViewResolver;
 public class SendGridMailerIT {
 	private SendGridMailer mailer;
 	private ViewResolverRegistry viewResolverRegistry;
+	private RequestContainer requestContainer = new ThreadLocalRequestContainer();
 	private String apiKey = null;
 	private String sender = null;
 
@@ -48,7 +51,7 @@ public class SendGridMailerIT {
 		viewResolverRegistry.addResolver(StringView.class, new StringViewResolver());
 		viewResolverRegistry.addResolver(FileView.class, new FileViewResolver());
 
-		mailer = new SendGridMailer(viewResolverRegistry, apiKey);
+		mailer = new SendGridMailer(viewResolverRegistry, requestContainer, apiKey);
 	}
 
 	@Test

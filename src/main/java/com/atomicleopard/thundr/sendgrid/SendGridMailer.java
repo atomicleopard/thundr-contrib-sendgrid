@@ -33,15 +33,16 @@ import com.threewks.thundr.logger.Logger;
 import com.threewks.thundr.mail.Attachment;
 import com.threewks.thundr.mail.BaseMailer;
 import com.threewks.thundr.mail.MailException;
-import com.threewks.thundr.view.BasicViewRenderer;
+import com.threewks.thundr.request.InMemoryResponse;
+import com.threewks.thundr.request.RequestContainer;
 import com.threewks.thundr.view.ViewResolverRegistry;
 
 public class SendGridMailer extends BaseMailer {
 
 	protected SendGrid sendgrid;
 
-	public SendGridMailer(ViewResolverRegistry viewResolverRegistry, String sendgridApiKey) {
-		super(viewResolverRegistry);
+	public SendGridMailer(ViewResolverRegistry viewResolverRegistry, RequestContainer requestContainer, String sendgridApiKey) {
+		super(viewResolverRegistry, requestContainer);
 		this.sendgrid = new SendGrid(sendgridApiKey);
 	}
 
@@ -86,10 +87,11 @@ public class SendGridMailer extends BaseMailer {
 		if (body == null) {
 			throw new MailException("No email body supplied");
 		}
-		BasicViewRenderer renderer = new BasicViewRenderer(viewResolverRegistry);
-		renderer.render(body);
-		String content = renderer.getOutputAsString();
-		String contentType = renderer.getContentType();
+		InMemoryResponse renderedResult = render(body);
+		String content = renderedResult.getBodyAsString();
+		String contentType = ContentType.cleanContentType(renderedResult.getContentTypeString());
+		contentType = StringUtils.isBlank(contentType) ? ContentType.TextHtml.value() : contentType;
+
 		if (ContentType.TextPlain.matches(contentType)) {
 			email.setText(content);
 		} else {
@@ -129,13 +131,12 @@ public class SendGridMailer extends BaseMailer {
 
 	protected void addAttachment(SendGrid.Email email, Attachment attachment) {
 		try {
-			BasicViewRenderer attachementRenderer = new BasicViewRenderer(viewResolverRegistry);
-			attachementRenderer.render(attachment.view());
+			InMemoryResponse renderedAttachment = render(attachment.view());
 			if (attachment.isInline()) {
 				// SendGrid handles wrapping the name in content id tags - (< and >) for us
 				email.addContentId(attachment.name(), attachment.name());
 			}
-			email.addAttachment(attachment.name(), new ByteArrayInputStream(attachementRenderer.getOutputAsBytes()));
+			email.addAttachment(attachment.name(), new ByteArrayInputStream(renderedAttachment.getBodyAsBytes()));
 		} catch (IOException e) {
 			throw new MailException(e, "Failed to add attachment '%s' to SendGrid email: %s", attachment.name(), e.getMessage());
 		}

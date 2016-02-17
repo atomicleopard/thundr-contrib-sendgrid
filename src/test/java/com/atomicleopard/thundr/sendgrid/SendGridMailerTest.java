@@ -36,6 +36,8 @@ import com.sendgrid.SendGrid;
 import com.sendgrid.SendGrid.Email;
 import com.threewks.thundr.http.ContentType;
 import com.threewks.thundr.mail.MailException;
+import com.threewks.thundr.request.RequestContainer;
+import com.threewks.thundr.request.ThreadLocalRequestContainer;
 import com.threewks.thundr.view.ViewResolverRegistry;
 import com.threewks.thundr.view.file.Disposition;
 import com.threewks.thundr.view.file.FileView;
@@ -48,7 +50,8 @@ public class SendGridMailerTest {
 	public ExpectedException thrown = ExpectedException.none();
 	private ViewResolverRegistry viewResolverRegistry = new ViewResolverRegistry();
 	private SendGrid.Email sent;
-	private SendGridMailer mailer = new SendGridMailer(viewResolverRegistry, "apiKey") {
+	private RequestContainer requestContainer = new ThreadLocalRequestContainer();
+	private SendGridMailer mailer = new SendGridMailer(viewResolverRegistry, requestContainer, "apiKey") {
 		@Override
 		protected void send(com.sendgrid.SendGrid.Email email) {
 			sent = email;
@@ -214,7 +217,7 @@ public class SendGridMailerTest {
 	public void shouldThrowMailExceptionIfAttachmentFails() throws IOException {
 		thrown.expect(MailException.class);
 		thrown.expectMessage("Failed to add attachment 'Text' to SendGrid email: Expected");
-		
+
 		Email email = spy(new SendGrid.Email());
 		mailer = spy(mailer);
 		when(mailer.createEmail()).thenReturn(email);
@@ -229,6 +232,6 @@ public class SendGridMailerTest {
 			.attach("Text", new FileView("file.txt", new byte[]{0,1,2}, "text/plain"), Disposition.Attachment)
 			.send();
 		// @formatter:on
-		
+
 	}
 }
