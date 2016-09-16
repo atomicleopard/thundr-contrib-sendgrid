@@ -17,7 +17,6 @@
  */
 package com.atomicleopard.thundr.sendgrid;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -25,125 +24,143 @@ import java.util.Map.Entry;
 
 import org.apache.commons.lang3.StringUtils;
 
+import com.sendgrid.Attachments;
+import com.sendgrid.Content;
+import com.sendgrid.Email;
+import com.sendgrid.Mail;
+import com.sendgrid.Method;
+import com.sendgrid.Personalization;
+import com.sendgrid.Request;
+import com.sendgrid.Response;
 import com.sendgrid.SendGrid;
-import com.sendgrid.SendGrid.Email;
-import com.sendgrid.SendGridException;
 import com.threewks.thundr.http.ContentType;
+import com.threewks.thundr.http.StatusCode;
 import com.threewks.thundr.logger.Logger;
 import com.threewks.thundr.mail.Attachment;
 import com.threewks.thundr.mail.BaseMailer;
 import com.threewks.thundr.mail.MailException;
 import com.threewks.thundr.request.InMemoryResponse;
 import com.threewks.thundr.request.RequestContainer;
+import com.threewks.thundr.util.Encoder;
 import com.threewks.thundr.view.ViewResolverRegistry;
 
 public class SendGridMailer extends BaseMailer {
 
-	protected SendGrid sendgrid;
+    protected SendGrid sendgrid;
 
-	public SendGridMailer(ViewResolverRegistry viewResolverRegistry, RequestContainer requestContainer, String sendgridApiKey) {
-		super(viewResolverRegistry, requestContainer);
-		this.sendgrid = new SendGrid(sendgridApiKey);
-	}
+    public SendGridMailer(ViewResolverRegistry viewResolverRegistry, RequestContainer requestContainer, String sendgridApiKey) {
+        super(viewResolverRegistry, requestContainer);
+        this.sendgrid = new SendGrid(sendgridApiKey);
+    }
 
-	public SendGrid getSendgrid() {
-		return sendgrid;
-	}
+    public SendGrid getSendgrid() {
+        return sendgrid;
+    }
 
-	@Override
-	protected void sendInternal(Entry<String, String> from, Entry<String, String> replyTo, Map<String, String> to, Map<String, String> cc, Map<String, String> bcc, String subject, Object body,
-			List<Attachment> attachments) {
-		SendGrid.Email email = createEmail();
-		email.setSubject(subject);
-		email.setFrom(from.getKey());
-		email.setFromName(determineName(from));
+    @Override
+    protected void sendInternal(Entry<String, String> from, Entry<String, String> replyTo, Map<String, String> to, Map<String, String> cc, Map<String, String> bcc, String subject, Object body,
+            List<Attachment> attachments) {
+        Mail mail = createMail();
+        mail.setSubject(subject);
+        mail.setFrom(email(from));
 
-		addBody(body, email);
-		addReplyTo(replyTo, email);
-		addTo(to, email);
-		addCc(cc, email);
-		addBcc(bcc, email);
-		addAttachments(attachments, email);
-		send(email);
-	}
+        Personalization personalization = new Personalization();
+        mail.addPersonalization(personalization);
 
-	protected Email createEmail() {
-		return new SendGrid.Email();
-	}
+        addReplyTo(replyTo, mail);
+        addBody(body, mail);
+        addTo(to, personalization);
+        addCc(cc, personalization);
+        addBcc(bcc, personalization);
+        addAttachments(attachments, mail);
+        send(mail);
+    }
 
-	protected void send(SendGrid.Email email) {
-		try {
-			SendGrid.Response response = sendgrid.send(email);
-			Logger.info("Sendgrid response: %s %s", response.getCode(), response.getMessage());
-			if (!response.getStatus()) {
-				throw new MailException("Failed to send email through Sendgrid (%s): %s", response.getCode(), response.getMessage());
-			}
-		} catch (SendGridException e) {
-			throw new MailException("Failed to send email through Sendgrid: %s", e.getMessage());
-		}
-	}
+    protected void send(Mail email) {
+        try {
+            Request request = new Request();
+            request.method = Method.POST;
+            request.endpoint = "mail/send";
+            request.body = email.build();
+            Response response = sendgrid.api(request);
+            Logger.info("Sendgrid response: %s %s", response.statusCode, response.body);
+            if (!StatusCode.OK.isInFamily(response.statusCode)) {
+                throw new MailException("Failed to send email through Sendgrid (%s): %s", response.statusCode, response.body);
+            }
+        } catch (IOException e) {
+            throw new MailException("Failed to send email through Sendgrid: %s", e.getMessage());
+        }
+    }
 
-	protected void addBody(Object body, SendGrid.Email email) {
-		if (body == null) {
-			throw new MailException("No email body supplied");
-		}
-		InMemoryResponse renderedResult = render(body);
-		String content = renderedResult.getBodyAsString();
-		String contentType = ContentType.cleanContentType(renderedResult.getContentTypeString());
-		contentType = StringUtils.isBlank(contentType) ? ContentType.TextHtml.value() : contentType;
+    protected void addBody(Object body, Mail email) {
+        if (body == null) {
+            throw new MailException("No email body supplied");
+        }
+        InMemoryResponse renderedResult = render(body);
+        String content = renderedResult.getBodyAsString();
+        String contentType = ContentType.cleanContentType(renderedResult.getContentTypeString());
+        contentType = StringUtils.isBlank(contentType) ? ContentType.TextHtml.value() : contentType;
 
-		if (ContentType.TextPlain.matches(contentType)) {
-			email.setText(content);
-		} else {
-			email.setHtml(content);
-		}
-	}
+        email.addContent(new Content(contentType, content));
+    }
 
-	protected void addReplyTo(Entry<String, String> replyTo, SendGrid.Email email) {
-		if (replyTo != null) {
-			email.setReplyTo(replyTo.getKey());
-		}
-	}
+    protected void addReplyTo(Entry<String, String> replyTo, Mail email) {
+        if (replyTo != null) {
+            email.setReplyTo(new Email(replyTo.getKey(), determineName(replyTo)));
+        }
+    }
 
-	protected void addAttachments(List<Attachment> attachments, SendGrid.Email email) {
-		for (Attachment attachment : attachments) {
-			addAttachment(email, attachment);
-		}
-	}
+    protected void addAttachments(List<Attachment> attachments, Mail email) {
+        for (Attachment attachment : attachments) {
+            addAttachment(email, attachment);
+        }
+    }
 
-	protected void addBcc(Map<String, String> bcc, SendGrid.Email email) {
-		for (Map.Entry<String, String> receiver : bcc.entrySet()) {
-			email.addBcc(receiver.getKey());
-		}
-	}
+    protected void addBcc(Map<String, String> bcc, Personalization personalization) {
+        for (Map.Entry<String, String> receiver : bcc.entrySet()) {
+            personalization.addBcc(email(receiver));
+        }
+    }
 
-	protected void addCc(Map<String, String> cc, SendGrid.Email email) {
-		for (Map.Entry<String, String> receiver : cc.entrySet()) {
-			email.addCc(receiver.getKey());
-		}
-	}
+    protected void addCc(Map<String, String> cc, Personalization personalization) {
+        for (Map.Entry<String, String> receiver : cc.entrySet()) {
+            personalization.addCc(email(receiver));
+        }
+    }
 
-	protected void addTo(Map<String, String> to, SendGrid.Email email) {
-		for (Map.Entry<String, String> receiver : to.entrySet()) {
-			email.addTo(receiver.getKey(), determineName(receiver));
-		}
-	}
+    protected void addTo(Map<String, String> to, Personalization personalization) {
+        for (Map.Entry<String, String> receiver : to.entrySet()) {
+            personalization.addTo(email(receiver));
+        }
+    }
 
-	protected void addAttachment(SendGrid.Email email, Attachment attachment) {
-		try {
-			InMemoryResponse renderedAttachment = render(attachment.view());
-			if (attachment.isInline()) {
-				// SendGrid handles wrapping the name in content id tags - (< and >) for us
-				email.addContentId(attachment.name(), attachment.name());
-			}
-			email.addAttachment(attachment.name(), new ByteArrayInputStream(renderedAttachment.getBodyAsBytes()));
-		} catch (IOException e) {
-			throw new MailException(e, "Failed to add attachment '%s' to SendGrid email: %s", attachment.name(), e.getMessage());
-		}
-	}
+    protected void addAttachment(Mail email, Attachment attachment) {
+        try {
+            InMemoryResponse renderedAttachment = render(attachment.view());
+            Attachments attachments = new Attachments();
+            // SendGrid handles wrapping the name in content id tags - (< and >) for us
+            attachments.setContentId(attachment.name());
+            attachments.setDisposition(attachment.disposition()
+                                                 .value());
+            attachments.setFilename(attachment.name());
+            attachments.setContent(new Encoder(renderedAttachment.getBodyAsBytes()).base64()
+                                                                                   .string());
+            attachments.setType(renderedAttachment.getContentTypeString());
+            email.addAttachments(attachments);
+        } catch (Exception e) {
+            throw new MailException(e, "Failed to add attachment '%s' to SendGrid email: %s", attachment.name(), e.getMessage());
+        }
+    }
 
-	protected String determineName(Map.Entry<String, String> receiver) {
-		return StringUtils.isBlank(receiver.getValue()) ? receiver.getKey() : receiver.getValue();
-	}
+    protected String determineName(Map.Entry<String, String> receiver) {
+        return StringUtils.isBlank(receiver.getValue()) ? receiver.getKey() : receiver.getValue();
+    }
 
+    protected Email email(Entry<String, String> receiver) {
+        return new Email(receiver.getKey(), determineName(receiver));
+    }
+
+    protected Mail createMail() {
+        return new Mail();
+    }
 }
