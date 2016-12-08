@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.threewks.thundr</groupId>
 		<artifactId>thundr-module</artifactId>
-		<version>3.0.0-rc3</version>
+		<version>3.0.0</version>
 	</parent>
 	<groupId>com.atomicleopard</groupId>
 	<artifactId>thundr-contrib-sendgrid</artifactId>
